@@ -53,7 +53,7 @@ class LeffaPredictor(object):
         self.vt_inference = LeffaInference(model=vt_model)
         self.vt_model_type = vt_model_type
 
-    def leffa_predict(self, src_image_path, ref_image_path, control_type, step=50, scale=2.5, seed=42):
+    def leffa_predict(self, src_image_path, ref_image_path, control_type, step=50, scale=2.5, seed=42, tryon_part=None):
         assert control_type in [
             "virtual_tryon", "pose_transfer"], "Invalid control type: {}".format(control_type)
         src_image = Image.open(src_image_path)
@@ -66,7 +66,8 @@ class LeffaPredictor(object):
         # Mask
         if control_type == "virtual_tryon":
             src_image = src_image.convert("RGB")
-            mask = self.mask_predictor(src_image, "upper")["mask"]
+            part = tryon_part if tryon_part else "upper"
+            mask = self.mask_predictor(src_image, part)["mask"]
         elif control_type == "pose_transfer":
             mask = Image.fromarray(np.ones_like(src_image_array) * 255)
 
@@ -105,8 +106,16 @@ class LeffaPredictor(object):
         # gen_image.save("gen_image.png")
         return np.array(gen_image)
 
-    def leffa_predict_vt(self, src_image_path, ref_image_path, step, scale, seed):
-        return self.leffa_predict(src_image_path, ref_image_path, "virtual_tryon", step, scale, seed)
+    def leffa_predict_vt(self, src_image_path, ref_image_path, tryon_part, step, scale, seed):
+        return self.leffa_predict(
+            src_image_path, 
+            ref_image_path, 
+            control_type="virtual_tryon", 
+            step=step, 
+            scale=scale, 
+            seed=seed, 
+            tryon_part=tryon_part
+        )
 
     def leffa_predict_pt(self, src_image_path, ref_image_path, step, scale, seed):
         return self.leffa_predict(src_image_path, ref_image_path, "pose_transfer", step, scale, seed)
@@ -190,6 +199,26 @@ if __name__ == "__main__":
 
                         vt_seed = gr.Number(
                             label="Random Seed", minimum=-1, maximum=2147483647, step=1, value=42)
+
+                        vt_part = gr.Dropdown(
+                            choices=["upper", "lower", 'overall', 'inner', 'outer'],
+                            value="upper",
+                            label="Try-on Part",
+                            info="Select the body part to apply the virtual try-on."
+                        )
+
+                vt_gen_button.click(
+                    fn=leffa_predictor.leffa_predict_vt, 
+                    inputs=[
+                        vt_src_image, 
+                        vt_ref_image, 
+                        vt_part,
+                        vt_step, 
+                        vt_scale, 
+                        vt_seed
+                    ], 
+                    outputs=[vt_gen_image]
+                )
 
                 vt_gen_button.click(fn=leffa_predictor.leffa_predict_vt, inputs=[
                     vt_src_image, vt_ref_image, vt_step, vt_scale, vt_seed], outputs=[vt_gen_image])
